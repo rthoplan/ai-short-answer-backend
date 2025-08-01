@@ -30,8 +30,11 @@ Respond only in JSON: { "score": number, "feedback": string }`;
         contents: [{ role: "user", parts: [{ text: prompt }] }]
     };
 
+    const GEMINI_MODEL = "models/gemini-1.5-flash";
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -39,24 +42,22 @@ Respond only in JSON: { "score": number, "feedback": string }`;
 
         const result = await response.json();
 
-        if (
-            result?.candidates?.[0]?.content?.parts?.[0]?.text
-        ) {
-            const raw = result.candidates[0].content.parts[0].text.trim();
+        const raw = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-            // Sanitize response in case it's wrapped in code block
-            const cleanText = raw.replace(/^\s*```json\s*|\s*```$/g, '');
-
-            const parsed = JSON.parse(cleanText);
-
-            res.json({
-                score: Math.round(parsed.score),
-                feedback: parsed.feedback
-            });
-        } else {
+        if (!raw) {
             console.error('Malformed response from Gemini:', JSON.stringify(result, null, 2));
-            res.status(500).json({ score: 0, feedback: 'Malformed AI response. Try again later.' });
+            return res.status(500).json({ score: 0, feedback: 'Malformed AI response. Try again later.' });
         }
+
+        // Remove ```json and ``` if present
+        const cleanText = raw.replace(/^\s*```json\s*|\s*```$/g, '');
+
+        const parsed = JSON.parse(cleanText);
+
+        res.json({
+            score: Math.round(parsed.score),
+            feedback: parsed.feedback
+        });
 
     } catch (err) {
         console.error('Error in /api/grade:', err);
